@@ -411,6 +411,20 @@ class AutoAlignmentPlugin(octoprint.plugin.EventHandlerPlugin):
         if event == 'PrintDone':
             self.printing = False
             self.aligning = False
+        if event == 'PrintCancelled':
+            g = self.g
+            g._p.reset_linenumber()
+
+            while len(g._p.sentlines) == 0 or len(g._p._buffer) != len(g._p.responses):
+                sleep(0.01)
+            g.teardown()
+            self.aligning = False
+            self._fake_ok = True
+            self.event.set()
+        if event == 'PrintPaused':
+            self.g._p.paused = True
+        if event == 'PrintResumed':
+            self.g._p.paused = True
 
     def print_started_sentinel(self, comm, cmd, cmd_type=None, *args, **kwargs):
         if 'M900' in cmd:
@@ -423,7 +437,7 @@ class AutoAlignmentPlugin(octoprint.plugin.EventHandlerPlugin):
         return cmd
 
     def align(self):
-        g = G(
+        self.g = g = G(
             print_lines=False,
             aerotech_include=False,
             direct_write=True,
