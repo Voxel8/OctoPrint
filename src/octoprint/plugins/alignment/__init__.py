@@ -410,6 +410,7 @@ class AutoAlignmentPlugin(octoprint.plugin.EventHandlerPlugin):
             self.printing = True
             self.aligning = True
             self._align_thread = Thread(target=self.align, name='Align')
+            sleep(5)
             self._align_thread.start()
             return None
         return cmd
@@ -447,14 +448,19 @@ class AutoAlignmentPlugin(octoprint.plugin.EventHandlerPlugin):
         #g.feed(6000)
 
 
+        self._logger.info('Resetting Line Number')
         g._p.reset_linenumber()
 
+        self._logger.info('Waiting for buffer to empty')
         while len(g._p.sentlines) == 0 or len(g._p._buffer) != len(g._p.responses):
             sleep(0.01)
+        self._logger.info('About to call G.teardown()')
         g.teardown()
         self.aligning = False
         self._fake_ok = True
+        self._logger.info('Setting event')
         self.event.set()
+        self._logger.info('Returning from thread')
 
     def readline(self, *args, **kwargs):
         out = True
