@@ -181,27 +181,26 @@ class AlignmentAutomator(object):
 
         self.header()
 
-        #purge etc
+        #purge etc #should be seperate
         g.extrude = False
         g.feed(travel_speed)
         g.abs_move(Z=30)
-        g.abs_move(1,1)
-        g.feed(50*60)
-        g.move(E=20)
-        g.feed(travel_speed)
 
         #print matrix feature
-        g.write('T0 G90 G1 X55 Y182 F9000')
-        g.write('G1 X3 Y183 F9000')
-        g.write('G91 G1 E10 F40')
-        g.write('G4 S2')
-        g.write('G1 E-.25 F2000')
-        g.write('G90 G1 X3 Y164 F9000')
-        g.write('G1 X4 Y164 F9000')
-        g.write('G1 X4 Y183 F9000')
-        g.write('G1 X5 Y183 F9000')
-        g.write('G1 X5 Y164 F9000 T0')
-        #This is our wiping script copied out of the config
+        g.feed(travel_speed)
+        g.abs_move(55,185)
+        g.abs_move(3,185)
+        g.feed(170)
+        g.move(E=15)
+        g.dwell(2)
+        g.move(E=-.2)
+        g.feed(travel_speed)
+        g.abs_move(3,164)
+        g.abs_move(4,164)
+        g.abs_move(4,185)
+        g.abs_move(5,185)
+        g.abs_move(5,164)
+        #This essentially the same as our wiping script copied out of the config
 
         #g.extrude = True
         g.abs_move(x=matrix_feature_offset[0]-15,y=matrix_feature_offset[1]-(25))
@@ -362,23 +361,6 @@ class AlignmentAutomator(object):
         offset_string = 'M218 T1 X{} Y{} Z{}'.format(*self.nozzle_offset)
         return offset_string
 
-    def replace_offsets(self, offset1, gcode_path):
-        f1 = open(gcode_path, 'r')
-        new_code = open(mod_gcode, 'w')
-        offset0 = 'M218 T0 X0 Y0 Z0'
-
-
-        for line in f1:
-            if "M218 T0" in line:
-                new_line = offset0+"\n"
-            elif "M218 T1" in line:
-                new_line = offset1+"\n"
-            else:
-                new_line = line
-            new_code.write(new_line)
-        f1.close()
-        new_code.close()
-
     def full_alignment(self):
         g = self.g
         g.move(X=-3)
@@ -412,19 +394,15 @@ class AutoAlignmentPlugin(octoprint.plugin.EventHandlerPlugin):
             self.printing = False
             self.aligning = False
         if event == 'PrintCancelled':
-            g = self.g
-            g._p.reset_linenumber()
-
-            while len(g._p.sentlines) == 0 or len(g._p._buffer) != len(g._p.responses):
-                sleep(0.01)
-            g.teardown()
+            self.g._p.reset_linenumber()
+            self.g.teardown()
             self.aligning = False
             self._fake_ok = True
             self.event.set()
         if event == 'PrintPaused':
             self.g._p.paused = True
         if event == 'PrintResumed':
-            self.g._p.paused = True
+            self.g._p.paused = False
 
     def print_started_sentinel(self, comm, cmd, cmd_type=None, *args, **kwargs):
         if 'M900' in cmd:
