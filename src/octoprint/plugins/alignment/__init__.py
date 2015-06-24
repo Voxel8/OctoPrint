@@ -35,15 +35,10 @@ class AlignmentAutomator(object):
 
     def __init__(self, g, matrix_x=[0.00000, 0.00000], matrix_y=[0.00000, 0.00000],
                  Ag_x=[0.00000, 0.00000], Ag_y=[0.00000, 0.00000],
-                 matrix_offset=[0.00000, 0.00000, 0.00000],
                  nozzle_offset=[37.50000, 0.0000, -4.90000],
-                 prof_reads = [0.00000, 0.00000, 0.00000, 0.00000],
-                 laser_offset=[18.4500, -44.52500, -19.0000, -44.52500], fudge = [0,0,-0.06], matrix_fudge = [1.0000]
-                 
+                 laser_offset=[18.4500, -44.52500, -19.0000, -44.52500], fudge = [0,0,-0.06]
                 ):
         self.g = g
-        self.matrix_offset = matrix_offset
-        self.prof_reads = prof_reads
         self.nozzle_offset = nozzle_offset
         self.laser_offset = laser_offset
         self.matrix_x = matrix_x
@@ -51,7 +46,6 @@ class AlignmentAutomator(object):
         self.Ag_x = Ag_x
         self.Ag_y = Ag_y
         self.fudge = fudge
-        self.matrix_fudge = matrix_fudge
         self.offsetstring = None
 
         g.write('G1 Z10 X-2 F1000')
@@ -126,12 +120,16 @@ class AlignmentAutomator(object):
         header = """
             M106 S0
             M125 S40
+            M104 S140 ; set temperature
+            G4 S35
             M280 P0 S110
             G28 ; home all axes
             G29
             M125 S39
             G90 ; use absolute coordinates
-            
+            G92 E0
+            ; set temperatures
+            M104 S220
             M42 P6 S0
         """
         for line in header.split('\n'):
@@ -140,6 +138,7 @@ class AlignmentAutomator(object):
     def footer(self):
         g = self.g
         footer = """
+            M104 S0 ; turn off temperature
 
             G90
         """
@@ -204,12 +203,12 @@ class AlignmentAutomator(object):
 
         #g.extrude = True
         g.abs_move(x=matrix_feature_offset[0]-15,y=matrix_feature_offset[1]-(25))
-        g.abs_move(Z=0.23-self.matrix_offset[2])
+        g.abs_move(Z=0.23)
         #g.extrude = False
         g.feed(travel_speed)
         g.abs_move(y=matrix_feature_offset[1])
         g.feed(960)
-       # g.extrude = True
+        g.extrude = True
         g.extrusion_multiplier = 3
         g.meander(x=6, y=matrix_elbow_lengths[1], spacing = 0.75, start = 'UL', orientation = 'y')
         g.abs_move(x=matrix_feature_offset[0])
@@ -219,7 +218,7 @@ class AlignmentAutomator(object):
         g.feed(5000)
         g.move(y=-40)
         g.move(x=15)
-        #g.extrude=False
+        g.extrude=False
         g.move(Z=5)
 
         #print silver feature
@@ -298,20 +297,12 @@ class AlignmentAutomator(object):
 
     def scan_all_levers(self):
         g = self.g
-        fff_z, fff_prof = self.lever_scan(start=(187, 184, 0))
-        #g.write('M104 S210')
+        fff_z, _ = self.lever_scan(start=(187, 184, 0))
+        g.write('M104 S210')
         self.activate_Ag()
         ag_z, _ = self.lever_scan(start=(3, 184, 0))
-        self.prof_reads[0] = fff_z
-        self.prof_reads[1] = fff_prof
         self.deactivate_Ag()
         self.nozzle_offset[2] = fff_z - ag_z + self.fudge[2]
-        g.abs_move(x=85, y=60)
-        g.abs_move(Z=4)
-        val = self.get_value()
-        position = g._current_position
-        z_pos = position['Z']
-        self.matrix_offset[2] = z_pos-(fff_z-20)+(val - fff_prof)+self.matrix_fudge[2]
 
     def locate_all_traces(self):
         g = self.g
@@ -373,10 +364,10 @@ class AlignmentAutomator(object):
         g = self.g
         g.move(X=-3)
         g.write('M106')
-        #g.write('M104 S145')
+        g.write('M104 S145')
         self.scan_all_levers()
         g.write('M106 S0')
-        #g.write('M109 S220') #For reliable extrusion at 250 micron nozzle. Set to 210 for 350 micron, and 200 or lower for larger
+        g.write('M109 S220') #For reliable extrusion at 250 micron nozzle. Set to 210 for 350 micron, and 200 or lower for larger
         self.print_registration_pattern()
         self.locate_all_traces()
         g.move(Z=10)
