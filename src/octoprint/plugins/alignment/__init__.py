@@ -397,13 +397,6 @@ class AutoAlignmentPlugin(octoprint.plugin.EventHandlerPlugin):
         if event == 'PrintResumed':
             if self.g is not None:
                 self.g._p.paused = False
-        if event == 'Disconnected':
-            if self.g is not None:
-                self.g.teardown(wait=False)
-            self.aligning = False
-            self._fake_ok = False
-            self._temp_resp_len = 0
-            self.event.set()
 
     def print_started_sentinel(self, comm, phase, cmd, cmd_type, gcode, *args, **kwargs):
         if 'M900' in cmd:
@@ -500,6 +493,12 @@ class AutoAlignmentPlugin(octoprint.plugin.EventHandlerPlugin):
             self._logger.warn('Write called when Mecode has control: ' + str(data))
 
     def close(self):
+        if self.g is not None:
+            self.g.teardown(wait=False)
+        self.aligning = False
+        self._fake_ok = False
+        self._temp_resp_len = 0
+        self.event.set()
         return self.s.close()
 
     def serial_factory(self, comm_instance, port, baudrate, connection_timeout):
