@@ -414,8 +414,8 @@ class AutoAlignmentPlugin(octoprint.plugin.EventHandlerPlugin):
         """
         try:
             self.align()
-        except:
-            self._logger.exception('Error while running alignment')
+        except Exception as e:
+            self._logger.exception('Error while running alignment: ' + str(e))
 
     def align(self):
         self._logger.info('Alignment started')
