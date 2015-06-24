@@ -435,8 +435,14 @@ class AutoAlignmentPlugin(octoprint.plugin.EventHandlerPlugin):
         g._p.start()
 
 
-        self.AA = AA = AlignmentAutomator(g)
-        AA.full_alignment()
+        try:
+            self.AA = AA = AlignmentAutomator(g)
+            AA.full_alignment()
+        except RuntimeError as e:
+            self._logger.info('AlignmentThread was forcibly exited: ' + str(e))
+            self.aligning = False
+            self.event.set()
+            return
 
 
         #g.write('G91')
