@@ -397,23 +397,25 @@ class AutoAlignmentPlugin(octoprint.plugin.EventHandlerPlugin):
         if event == 'PrintResumed':
             if self.g is not None:
                 self.g._p.paused = False
-        if event == 'Disconnected':
-            if self.g is not None:
-                self.g.teardown(wait=False)
-            self.aligning = False
-            self._fake_ok = False
-            self._temp_resp_len = 0
-            self.event.set()
 
     def print_started_sentinel(self, comm, phase, cmd, cmd_type, gcode, *args, **kwargs):
         if 'M900' in cmd:
             self.event.clear()
             self.aligning = True
-            self._align_thread = Thread(target=self.align, name='Align')
+            self._align_thread = Thread(target=self.align_entrypoint, name='Align')
             sleep(1)
             self._align_thread.start()
             return None
         return cmd
+
+    def align_entrypoint(self):
+        """
+        Entrypoint for the alignment thread.  All exceptions are caught and logged.
+        """
+        try:
+            self.align()
+        except Exception as e:
+            self._logger.exception('Error while running alignment: ' + str(e))
 
     def align(self):
         self._logger.info('Alignment started')
@@ -433,8 +435,14 @@ class AutoAlignmentPlugin(octoprint.plugin.EventHandlerPlugin):
         g._p.start()
 
 
-        self.AA = AA = AlignmentAutomator(g)
-        AA.full_alignment()
+        try:
+            self.AA = AA = AlignmentAutomator(g)
+            AA.full_alignment()
+        except RuntimeError as e:
+            self._logger.info('AlignmentThread was forcibly exited: ' + str(e))
+            self.aligning = False
+            self.event.set()
+            return
 
 
         #g.write('G91')
@@ -463,20 +471,25 @@ class AutoAlignmentPlugin(octoprint.plugin.EventHandlerPlugin):
         self.event.set()
 
     def readline(self, *args, **kwargs):
-        out = True
         if self.aligning:
-            out = self.event.wait(2)
-        if out:
-            if self._fake_ok:
-                self._fake_ok = False
-                return 'ok\n'
+            self.event.wait(2)
+        if self._fake_ok:
+            # Just finished aligning, and need to send fake ok.
+            self._fake_ok = False
+            resp = 'ok\n'
+        elif not self.aligning:
             resp = self.s.readline(*args, **kwargs)
         else:
+            # We are aligning.
             if len(self.g._p.temp_readings) > self._temp_resp_len:
+                # We have a new temp reading.  Respond with that.
                 self._temp_resp_len = len(self.g._p.temp_readings)
                 resp = self.g._p.temp_readings[-1]
+            elif self.AA.offsetstring is not None:
+                # Display the offset so users can use it later.
+                resp = self.AA.offsetstring
             else:
-                resp = 'echo: Alignment script is running' if self.AA.offsetstring is None else self.AA.offsetstring
+                resp = 'echo: Alignment script is running'
         return resp
 
     def write(self, data):
@@ -486,6 +499,12 @@ class AutoAlignmentPlugin(octoprint.plugin.EventHandlerPlugin):
             self._logger.warn('Write called when Mecode has control: ' + str(data))
 
     def close(self):
+        if self.g is not None:
+            self.g.teardown(wait=False)
+        self.aligning = False
+        self._fake_ok = False
+        self._temp_resp_len = 0
+        self.event.set()
         return self.s.close()
 
     def serial_factory(self, comm_instance, port, baudrate, connection_timeout):
