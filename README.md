@@ -31,6 +31,8 @@ OctoPrint via `setup.py`:
 
 You should also do this every time after pulling from the repository, since the dependencies might have changed.
 
+This fork of Octoprint also depends on [numpy](http://www.scipy.org/install.html) and [mecode](https://github.com/jminardi/mecode).
+
 OctoPrint currently only supports Python 2.7.
 
 Usage
